@@ -39,20 +39,26 @@ def home():
 
 @app.route("/extract", methods=["POST"])
 def extract_invoice():
-    file = request.files.get('file')
-    if not file:
-        return jsonify({'error': 'No file uploaded'}), 400
+    try:
+        file = request.files.get("file")
+        if file and file.filename != "":
+            file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+            file.save(file_path)
+            processed_file = file.filename
+        else:
+            sample_files = os.listdir(SAMPLE_FOLDER)
+            if not sample_files:
+                return jsonify({"error": "No sample files found"}), 404
+            processed_file = sample_files[0]
+            file_path = os.path.join(SAMPLE_FOLDER, processed_file)
 
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(file_path)
-
-    # Here you would process the file
-    return jsonify({'message': f'Invoice extracted from {file.filename}'})
-       
-
+        return jsonify({
+            "status": "success",
+            "file_used": file_path,
+            "message": f"Invoice extracted from {processed_file}"
+        })
     except Exception as e:
-        LOG.exception("Unexpected error in /extract")
-        return jsonify({"error": "internal server error", "message": str(e)}), 500
+        return jsonify({"error": str(e)})
 
 
 # Temporary debug route to list what sample files are present on the server
