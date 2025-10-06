@@ -4,7 +4,7 @@ import pdfplumber
 import os
 
 app = Flask(__name__)
-CORS(app)  # Allow all origins (for your frontend)
+CORS(app)  # allow requests from frontend
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -18,28 +18,36 @@ def home():
 def extract():
     if "file" not in request.files:
         return jsonify({"error": "No file part in request"}), 400
-    
+
     file = request.files["file"]
     if file.filename == "":
         return jsonify({"error": "Empty filename"}), 400
 
+    # save temporarily
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
     file.save(filepath)
 
-    # --- Sample PDF processing (replace with your real extraction) ---
+    # extract text using pdfplumber
     try:
+        text = ""
         with pdfplumber.open(filepath) as pdf:
-            text = ""
             for page in pdf.pages:
-                text += page.extract_text() + "\n"
+                t = page.extract_text()
+                if t:
+                    text += t + "\n"
     except Exception as e:
         return jsonify({"error": f"Failed to read PDF: {str(e)}"}), 500
+    finally:
+        # optional: remove file after processing (comment out if you want to keep)
+        try:
+            os.remove(filepath)
+        except Exception:
+            pass
 
-    # Return JSON in the format expected by your frontend
     return jsonify({
         "content": text,
-        "message": "Invoice extracted"
+        "message": f"Invoice extracted from {file.filename}"
     })
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host="0.0.0.0", port=5000)
