@@ -1,37 +1,39 @@
 from flask import Flask, request, jsonify
-import os
+import pdfplumber
+import pytesseract
+from pdf2image import convert_from_path
+import pandas as pd
 
 app = Flask(__name__)
 
-# Folder to save uploaded files
-UPLOAD_FOLDER = 'uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 @app.route('/')
-def index():
-    return "Invoice Extractor API is live! Use /extract to POST a PDF."
+def home():
+    return "Invoice Extractor API is live!"
 
 @app.route('/extract', methods=['POST'])
 def extract_invoice():
-    # Check if a file is in the request
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Save PDF temporarily
+        file_path = f"temp_{file.filename}"
+        file.save(file_path)
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
+        # Extract text from PDF
+        text = ''
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                text += page.extract_text() + '\n'
 
-    filename = file.filename
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(filepath)
-
-    # Placeholder for invoice extraction logic
-    # You can replace this with your actual extraction code
-    return jsonify({
-        'status': 'success',
-        'message': f'Invoice extracted from {filename}'
-    })
+        # Example: Return extracted text
+        return jsonify({'text': text})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(debug=True)
