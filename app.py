@@ -39,37 +39,16 @@ def home():
 
 @app.route("/extract", methods=["POST"])
 def extract_invoice():
-    try:
-        # 1) prefer uploaded file via form-data key 'file'
-        if 'file' in request.files:
-            f = request.files['file']
-            if f.filename == '':
-                return jsonify({"error": "empty filename"}), 400
-            saved_path = os.path.join(UPLOAD_FOLDER, f.filename)
-            f.save(saved_path)
-            used_path = saved_path
-            LOG.info(f"Saved uploaded file to: {saved_path}")
+    file = request.files.get('file')
+    if not file:
+        return jsonify({'error': 'No file uploaded'}), 400
 
-        else:
-            # 2) fallback to sample in repo
-            sample_name = request.form.get('sample', 'invoice1.pdf')
-            used_path = os.path.join(SAMPLE_FOLDER, sample_name)
-            if not os.path.exists(used_path):
-                LOG.error(f"Sample file not found at: {used_path}")
-                return jsonify({
-                    "error": "sample file not found",
-                    "path_checked": used_path
-                }), 404
-            LOG.info(f"Using sample file: {used_path}")
+    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(file_path)
 
-        # call the (placeholder) extraction function
-        extracted = extract_text_from_pdf(used_path)
-
-        return jsonify({
-            "status": "success",
-            "file_used": used_path,
-            "extracted": extracted
-        })
+    # Here you would process the file
+    return jsonify({'message': f'Invoice extracted from {file.filename}'})
+       
 
     except Exception as e:
         LOG.exception("Unexpected error in /extract")
