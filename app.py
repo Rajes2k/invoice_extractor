@@ -2,6 +2,11 @@ from flask import Flask, request, jsonify
 import pdfplumber
 import os
 
+# install: pip install flask-cors
+from flask_cors import CORS
+app = Flask(__name__)
+CORS(app)   # allow all origins (ok for testing)
+
 app = Flask(__name__)
 
 UPLOAD_FOLDER = "uploads"
