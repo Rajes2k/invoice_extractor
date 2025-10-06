@@ -1,8 +1,8 @@
-flask
+Flask==2.3.2
 pdfplumber
 pdf2image
 pytesseract
 pillow
 pandas
-gunicorn
+gunicorn==23.0.0
 
