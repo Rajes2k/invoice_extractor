@@ -19,7 +19,6 @@
     h1{margin:0;font-size:20px}
     p.lead{margin:0;color:var(--muted);font-size:14px}
     .grid{display:grid;grid-template-columns:360px 1fr;gap:18px;margin-top:20px}
-    /* upload card */
     .card{background:var(--card);padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)}
     .drop{border:2px dashed rgba(255,255,255,0.04);padding:22px;border-radius:10px;background:var(--glass);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:180px;cursor:pointer;transition:all .12s}
     .drop.hover{border-color: rgba(124,58,237,0.9);transform:translateY(-4px)}
@@ -29,7 +28,6 @@
     .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
     .progress{height:10px;background:rgba(255,255,255,0.03);border-radius:999px;overflow:hidden;margin-top:10px}
     .bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .2s}
-    /* result column */
     .meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
     .chip{background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:999px;font-size:13px;color:var(--muted)}
     pre.result{background:#041323;padding:16px;border-radius:10px;color:#dbeafe;white-space:pre-wrap;max-height:520px;overflow:auto;border:1px solid rgba(255,255,255,0.03)}
@@ -90,18 +88,16 @@
         <pre id="result" class="result">No data yet</pre>
 
         <footer>
-          <span class="small">If you see a CORS error in the browser console, add CORS to your Flask app (instructions below).</span>
+          <span class="small">If you see a CORS error in the browser console, add CORS to your Flask app.</span>
         </footer>
       </div>
     </div>
   </div>
 
   <script>
-    // ---------- CONFIG ----------
-    const API_URL = "https://invoice-extractor-2-835j.onrender.com/extract"; // <- set your endpoint here
+    const API_URL = "https://invoice-extractor-2-835j.onrender.com/extract";
     document.getElementById('endpointDisplay').textContent = API_URL;
 
-    // ---------- UI elements ----------
     const drop = document.getElementById('drop');
     const fileInput = document.getElementById('fileInput');
     const uploadBtn = document.getElementById('uploadBtn');
@@ -118,135 +114,76 @@
 
     let currentFile = null;
 
-    // Drag / click handlers
     drop.addEventListener('click', ()=> fileInput.click());
-    drop.addEventListener('dragover', (e)=>{ e.preventDefault(); drop.classList.add('hover'); });
+    drop.addEventListener('dragover', (e)=> { e.preventDefault(); drop.classList.add('hover'); });
     drop.addEventListener('dragleave', ()=> drop.classList.remove('hover'));
     drop.addEventListener('drop', (e)=> {
       e.preventDefault(); drop.classList.remove('hover');
-      const f = e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) selectFile(f);
+      if(e.dataTransfer.files.length) selectFile(e.dataTransfer.files[0]);
     });
 
-    fileInput.addEventListener('change', (e)=>{
-      if (e.target.files && e.target.files[0]) selectFile(e.target.files[0]);
+    fileInput.addEventListener('change', (e)=> {
+      if(e.target.files.length) selectFile(e.target.files[0]);
     });
 
     clearBtn.addEventListener('click', ()=>{
-      currentFile = null;
-      fileNameEl.textContent = "Click or drop PDF here";
-      resultEl.textContent = "No data yet";
-      invNumEl.textContent = "—";
-      invDateEl.textContent = "—";
-      invTotalEl.textContent = "—";
-      statusEl.textContent = "Idle";
-      bar.style.width = "0%";
-      lastFileEl.textContent = "—";
-      bytesEl.textContent = "0";
+      currentFile=null;
+      fileNameEl.textContent="Click or drop PDF here";
+      resultEl.textContent="No data yet";
+      invNumEl.textContent="—";
+      invDateEl.textContent="—";
+      invTotalEl.textContent="—";
+      statusEl.textContent="Idle";
+      bar.style.width="0%";
+      lastFileEl.textContent="—";
+      bytesEl.textContent="0";
     });
 
-    uploadBtn.addEventListener('click', async ()=>{
-      if (!currentFile) return alert("Please select a PDF file first.");
-      await uploadFile(currentFile);
+    uploadBtn.addEventListener('click', ()=> {
+      if(!currentFile) return alert("Please select a PDF file first.");
+      uploadFile(currentFile);
     });
 
     function selectFile(file){
-      if (file.type !== "application/pdf") {
-        alert("Please select a PDF file.");
-        return;
+      if(file.type!=="application/pdf") { alert("Please select a PDF file."); return; }
+      currentFile=file;
+      fileNameEl.textContent=file.name;
+      lastFileEl.textContent=file.name;
+      bytesEl.textContent=file.size.toLocaleString()+" bytes";
+    }
+
+    async function uploadFile(file){
+      statusEl.textContent="Starting upload...";
+      bar.style.width="0%";
+      const fd = new FormData();
+      fd.append('file', file);
+
+      try{
+        const res = await fetch(API_URL, { method:'POST', body:fd });
+        if(!res.ok) throw new Error(`Server returned ${res.status}`);
+        const json = await res.json();
+        statusEl.textContent="Done";
+        bar.style.width="100%";
+        showResult(json);
+      } catch(err){
+        statusEl.textContent="Error";
+        resultEl.textContent=`Network/CORS error or server error:\n${err.message}`;
+        console.error(err);
       }
-      currentFile = file;
-      fileNameEl.textContent = file.name;
-      lastFileEl.textContent = file.name;
-      bytesEl.textContent = file.size.toLocaleString() + " bytes";
     }
 
-    // Upload function with progress (XHR)
-    function uploadFile(file){
-      return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        const fd = new FormData();
-        fd.append('file', file);
-
-        xhr.open('POST', API_URL, true);
-
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const pct = Math.round((e.loaded / e.total) * 100);
-            bar.style.width = pct + "%";
-            statusEl.textContent = `Uploading ${pct}%`;
-          }
-        };
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            statusEl.textContent = "Done";
-            bar.style.width = "100%";
-            let json;
-            try { json = JSON.parse(xhr.responseText); } catch (err) {
-              resultEl.textContent = "Invalid JSON response:\n" + xhr.responseText;
-              return resolve();
-            }
-            showResult(json);
-            return resolve(json);
-          } else {
-            statusEl.textContent = `Error ${xhr.status}`;
-            resultEl.textContent = `Server returned status ${xhr.status}\n\n${xhr.responseText}`;
-            return resolve();
-          }
-        };
-
-        xhr.onerror = () => {
-          statusEl.textContent = "Network error";
-          resultEl.textContent = "Network or CORS error. Check console for details.";
-          return resolve();
-        };
-
-        // Small UX delay so progress visible
-        statusEl.textContent = "Starting upload...";
-        setTimeout(()=> xhr.send(fd), 200);
-      });
-    }
-
-    // Display JSON nicely and try to extract key fields
     function showResult(json){
-      // pretty display
-      resultEl.textContent = JSON.stringify(json, null, 2);
-
-      // common shapes: either { content: "...", message: "..." } or { text: "..." }
-      const text = (json.content || json.text || json.result || "") + "";
-
-      // Try to find Invoice number (very simple heuristics)
-      let invNum = findPattern(text, /\b(?:Invoice\s*No\.?|Invoice\s*Number|INV[-: ]?)\s*([A-Z0-9-]+)/i);
-      if (!invNum) invNum = findPattern(text, /\bINV[-\s]*\d{2,}\b/i);
-      invNumEl.textContent = invNum || "—";
-
-      // Try date
-      let date = findPattern(text, /\b(?:Invoice\s*Date|Date)[:\s]*([A-Za-z0-9,\s\-\/]+)/i);
-      if (!date) date = findPattern(text, /\b(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})\b/i);
-      invDateEl.textContent = date ? date.trim().split('\n')[0] : "—";
-
-      // Try total (Total Due / Amount / Grand Total)
-      let total = findPattern(text, /\b(?:Total\s+Due|Total|Grand Total|Amount Due|Total\s*Amount)[:\s]*([$₹£€]?\s*[0-9,]+(?:\.[0-9]{2})?)/i);
-      if (!total) total = findPattern(text, /([$₹£€]\s*[0-9,]+(?:\.[0-9]{2})?)/);
-      invTotalEl.textContent = total || "—";
+      resultEl.textContent=JSON.stringify(json,null,2);
+      const text=(json.content||json.text||json.result||"")+"";
+      invNumEl.textContent=findPattern(text, /\b(?:Invoice\s*No\.?|Invoice\s*Number|INV[-: ]?)\s*([A-Z0-9-]+)/i)||"—";
+      invDateEl.textContent=findPattern(text, /\b(?:Invoice\s*Date|Date)[:\s]*([A-Za-z0-9,\s\-\/]+)/i)||"—";
+      invTotalEl.textContent=findPattern(text, /\b(?:Total\s+Due|Total|Grand Total|Amount Due|Total\s*Amount)[:\s]*([$₹£€]?\s*[0-9,]+(?:\.[0-9]{2})?)/i) || "—";
     }
 
-    function findPattern(text, re){
-      if (!text) return null;
-      const m = text.match(re);
-      return m ? (m[1] || m[0]) : null;
+    function findPattern(text,re){
+      const m=text.match(re);
+      return m ? (m[1]||m[0]) : null;
     }
-
-    // If the user wants automatic on load test (optional)
-    // window.addEventListener('load', ()=> { /* optional auto behavior */ });
-
-    // Helpful: print CORS note if fetch blocked
-    window.addEventListener('error', (e) => {
-      if (e.message && /Failed to fetch|NetworkError/.test(e.message)) {
-        console.warn("Network fetch error — if you see CORS issues, add CORS to your Flask app.");
-      }
-    });
   </script>
 </body>
 </html>

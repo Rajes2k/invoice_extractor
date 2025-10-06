@@ -1,13 +1,10 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import pdfplumber
 import os
 
-# install: pip install flask-cors
-from flask_cors import CORS
 app = Flask(__name__)
-CORS(app)   # allow all origins (ok for testing)
-
-app = Flask(__name__)
+CORS(app)  # Allow all origins (for your frontend)
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -18,10 +15,10 @@ def home():
     return "Invoice Extractor API is running!"
 
 @app.route("/extract", methods=["POST"])
-def extract_invoice():
+def extract():
     if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-
+        return jsonify({"error": "No file part in request"}), 400
+    
     file = request.files["file"]
     if file.filename == "":
         return jsonify({"error": "Empty filename"}), 400
@@ -29,15 +26,20 @@ def extract_invoice():
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
     file.save(filepath)
 
-    text = ""
-    with pdfplumber.open(filepath) as pdf:
-        for page in pdf.pages:
-            text += page.extract_text() or ""
+    # --- Sample PDF processing (replace with your real extraction) ---
+    try:
+        with pdfplumber.open(filepath) as pdf:
+            text = ""
+            for page in pdf.pages:
+                text += page.extract_text() + "\n"
+    except Exception as e:
+        return jsonify({"error": f"Failed to read PDF: {str(e)}"}), 500
 
+    # Return JSON in the format expected by your frontend
     return jsonify({
-        "message": f"Invoice extracted from {file.filename}",
-        "content": text[:500]   # only first 500 chars
+        "content": text,
+        "message": "Invoice extracted"
     })
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(debug=True)
