@@ -5,6 +5,10 @@ import os
 import requests
 import pdfplumber
 import json
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
 
 app = Flask(__name__)
 CORS(app)  # Allow frontend to call this API
