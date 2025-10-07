@@ -1,4 +1,3 @@
-# app.py
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -12,12 +11,10 @@ CORS(app)  # Allow frontend to call this API
 
 load_dotenv()
 
-# Upload folder
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-# Hugging Face model and token (set in Render env vars)
 HF_MODEL = os.getenv("HF_MODEL", "mistralai/Mistral-7B-Instruct-v0.2")
 HF_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
 HF_API_URL = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
@@ -31,16 +28,15 @@ def call_hf_inference(prompt, max_tokens=512, temperature=0.0):
     payload = {
         "inputs": prompt,
         "parameters": {"max_new_tokens": max_tokens, "temperature": temperature},
-        "options": {"wait_for_model": True}  # ensures model is loaded
+        "options": {"wait_for_model": True}
     }
 
     try:
-        resp = requests.post(HF_API_URL, headers=headers, json=payload, timeout=120)
+        resp = requests.post(HF_API_URL, headers=headers, json=payload, timeout=300)
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
         return {"error": f"HF API request failed: {str(e)}"}
 
-    # Parse response
     try:
         data = resp.json()
         if isinstance(data, list) and len(data) > 0 and "generated_text" in data[0]:
@@ -58,7 +54,6 @@ def extract_json_from_text(text):
     try:
         return json.loads(text)
     except Exception:
-        # find first '{' and last '}'
         i = text.find("{")
         j = text.rfind("}")
         if i != -1 and j != -1 and j > i:
@@ -74,18 +69,15 @@ def home():
 
 @app.route("/extract", methods=["POST"])
 def extract():
-    # 1) Validate file
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
     file = request.files["file"]
     if file.filename == "":
         return jsonify({"error": "Empty filename"}), 400
 
-    # 2) Save temporarily
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
     file.save(filepath)
 
-    # 3) Extract text from PDF
     text = ""
     try:
         with pdfplumber.open(filepath) as pdf:
@@ -97,7 +89,6 @@ def extract():
         os.remove(filepath)
         return jsonify({"error": f"Failed to read PDF: {str(e)}"}), 500
 
-    # 4) Prepare prompt for LLM
     prompt = f"""
 You are an invoice extraction assistant. Extract these fields from the invoice text and return ONLY a VALID JSON object:
 
@@ -114,7 +105,6 @@ Invoice text:
 \"\"\"{text[:40000]}\"\"\"
 """
 
-    # 5) Call Hugging Face
     hf_resp = call_hf_inference(prompt)
     if "error" in hf_resp:
         os.remove(filepath)
@@ -123,7 +113,6 @@ Invoice text:
     raw_llm_text = hf_resp.get("text", "")
     parsed_json = extract_json_from_text(raw_llm_text)
 
-    # 6) Cleanup file
     try:
         os.remove(filepath)
     except Exception:
