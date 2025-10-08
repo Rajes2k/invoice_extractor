@@ -1,10 +1,16 @@
 # app.py
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import pdfplumber
 import os
 import requests
 
+
 app = Flask(__name__)
+
+# Allow your frontend URL to access backend
+CORS(app, origins=["https://invoice-frontend-ulb0.onrender.com"])
+
 
 GROQ_MODEL = os.getenv("GROQ_MODEL")  # e.g., groq/llama3-7b-instruct
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")  # Your GROQ API key
