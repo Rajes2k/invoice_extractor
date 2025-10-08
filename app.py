@@ -1,73 +1,29 @@
 import os
-import requests
 from flask import Flask, request, jsonify
-from flask_cors import CORS
-import traceback
-import logging
-import sys
-from dotenv import load_dotenv
-load_dotenv()
-
-
-# Enable detailed logs for Render
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-
+import requests
 
 app = Flask(__name__)
-CORS(app)
 
-HF_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
-HF_MODEL = os.getenv("HF_MODEL", "gpt2")
-
-@app.route("/", methods=["GET"])
-def home():
-    return jsonify({"status": "ok", "message": "Invoice Extractor API is running!"})
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "groq/llama3-7b-instruct")
 
 @app.route("/extract", methods=["POST"])
-def extract():
-    try:
-        file = request.files["file"]
-        if not file:
-            return jsonify({"error": "No file uploaded"}), 400
+def extract_invoice():
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    
+    file = request.files["file"]
+    content = file.read().decode("utf-8")  # Adjust if PDF → text
+    # Call Groq API
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+    json_data = {"inputs": content}
+    response = requests.post(f"https://api.groq.ai/v1/models/{GROQ_MODEL}/invoke", headers=headers, json=json_data)
+    
+    if response.status_code != 200:
+        return jsonify({"error": f"Groq API error: {response.status_code} - {response.text}"}), 502
 
-        # Save file temporarily
-        temp_path = "temp_invoice.pdf"
-        file.save(temp_path)
-
-        # Send PDF to Hugging Face Inference API
-        headers = {
-            "Authorization": f"Bearer {os.getenv('HUGGINGFACE_API_TOKEN')}",
-        }
-
-        with open(temp_path, "rb") as f:
-            pdf_bytes = f.read()
-
-        response = requests.post(
-            f"https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2",
-            headers=headers,
-            json={"inputs": "Extract invoice details from this PDF."}
-        )
-
-        # Debugging info
-        print("HF_TOKEN exists:", bool(os.getenv("HUGGINGFACE_API_TOKEN")))
-        print("HF_MODEL:", os.getenv("HF_MODEL"))
-
-
-        if response.status_code != 200:
-            return jsonify({
-                "error": f"HF API HTTP {response.status_code}",
-                "detail": response.text
-            }), 502
-
-        result = response.json()
-        return jsonify(result)
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
+    return jsonify({"extracted_data": response.json()})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
-
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
