@@ -3,63 +3,58 @@ from flask_cors import CORS
 import requests
 import os
 from PyPDF2 import PdfReader
-from io import BytesIO
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-8b-8192")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-70b-8192")
 
-@app.route("/", methods=["GET"])
+@app.route('/')
 def home():
-    return jsonify({"message": "Invoice Extractor is live"}), 200
+    return jsonify({"message": "Invoice Extractor is live"})
 
+@app.route('/extract', methods=['POST'])
+def extract():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
 
-@app.route("/extract", methods=["POST"])
-def extract_invoice():
-    try:
-        if "file" not in request.files:
-            return jsonify({"error": "No file uploaded"}), 400
+    file = request.files['file']
+    reader = PdfReader(file)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text()
 
-        file = request.files["file"]
+    # Send text to Groq LLM
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
 
-        # ✅ Extract text from PDF
-        pdf = PdfReader(BytesIO(file.read()))
-        text = ""
-        for page in pdf.pages:
-            text += page.extract_text() or ""
+    data = {
+        "model": GROQ_MODEL,
+        "messages": [
+            {"role": "system", "content": "You are an AI that extracts key invoice fields."},
+            {"role": "user", "content": f"Extract structured data (invoice number, date, total, etc.) from this text:\n{text}"}
+        ]
+    }
 
-        if not text.strip():
-            return jsonify({"error": "No text found in PDF"}), 400
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers=headers,
+        json=data
+    )
 
-        # ✅ Send request to GROQ API
-        headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json"
-        }
+    if response.status_code != 200:
+        return jsonify({"error": f"GROQ API error: {response.text}"}), response.status_code
 
-        data = {
-            "model": GROQ_MODEL,
-            "messages": [
-                {"role": "system", "content": "You are an invoice data extractor."},
-                {"role": "user", "content": f"Extract key invoice details from this text:\n{text}"}
-            ]
-        }
+    result = response.json()
+    extracted_data = result["choices"][0]["message"]["content"]
 
-        response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=data)
-        result = response.json()
+    return jsonify({"extracted_data": extracted_data})
 
-        if response.status_code != 200:
-            return jsonify({"error": f"GROQ API error: {result}"}), 500
-
-        extracted_text = result["choices"][0]["message"]["content"]
-
-        return jsonify({"extracted_data": extracted_text}), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+if __name__ == '__main__':
+    app.run(debug=True)
